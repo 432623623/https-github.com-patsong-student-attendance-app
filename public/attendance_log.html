@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Student Attendance App</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: auto;
+      }
+	table {
+	  font-family: Arial, Helvetica, sans-serif;
+		border-collapse: collapse;
+	}
+	th {
+	  padding: 12px;
+	  text-align: left;
+	  background-color: grey;
+	  border: 1px solid #ddd;
+	  color: white;
+	}
+	td {
+		padding: 12px;
+		text-align: left;
+		border: 1px solid #ddd;
+	}
+
+	  .present {
+		background-color: #d4edda;
+	  }
+	  .absent {
+		background-color: #f8d7da;
+	  }
+    </style>
+  </head>
+  <body>
+  	<a href="../">Home</a>
+
+    <h1>Attendance Log</h1>
+	<div id="student-list"></div>
+
+	<script>
+		const studentList = document.getElementById("student-list");
+
+		function getLast7Days(){
+			const days= [];
+			for(let i=6; i>=0; i--){
+				const d = new Date();
+				d.setDate(d.getDate() - i);
+				days.push(d.toISOString().split("T")[0]);
+			}
+			return days;
+		}
+		async function loadAttendance(){
+			const res = await fetch("http://localhost:3000/api/attendance");
+			const data = await res.json();
+			console.log(data);
+			renderAttendance(data);
+		}
+		function renderAttendance(data){
+			studentList.innerHTML = '';
+			const dates = getLast7Days();
+			const table = document.createElement("table");
+			table.border = "1";
+			
+			let header = "<tr><th>No</th><th>Name</th>";
+			dates.forEach(d => header += `<th>${d}</th>`);
+			header += "</tr>";
+			
+			table.innerHTML = header;
+			
+			const grouped = {};
+			
+			data.forEach(row =>{
+				if(!grouped[row.student_id]){
+					grouped[row.student_id] = {
+						name: row.name,
+						records: {}
+					};
+				}
+				if (row.date){
+					grouped[row.student_id].records[row.date] = row.status;
+				}
+			});
+			let index = 1;
+			
+			for (const studentId in grouped) {
+				const student = grouped[studentId];
+				const row = document.createElement('tr');
+				let rowHTML = `<td>${index++}</td><td>${student.name}</td>`;
+				dates.forEach(date =>{
+					const status = student.records[date] || "";
+					rowHTML +=`
+						<td>
+							<select class="status-select" 
+								onchange="updateAttendance(${studentId}, '${date}', this.value); setColor(this)">
+								<option value="">-</option>
+								<option value="Present" ${status === "Present" ? "selected" : ""}>Present</option>
+								<option value="Absent" ${status === "Absent" ? "selected" : ""}>Absent</option>
+							</select>
+						</td>
+					`;
+				});
+				row.innerHTML = rowHTML;
+				table.appendChild(row);
+			}
+			studentList.appendChild(table);
+			document.querySelectorAll(".status-select").forEach(setColor);
+		}
+		function setColor(select){
+			select.classList.remove("present", "absent");
+			if(select.value === "Present"){
+				select.classList.add("present");
+			} else if (select.value === "Absent"){
+				select.classList.add("absent");
+			}
+		}
+		async function updateAttendance(student_id, date, status){
+			await fetch("http://localhost:3000/api/students/attendance", {
+				method: "POST",
+				headers: {"Content-Type": "application/json"},
+				body: JSON.stringify({ student_id, date, status })
+			});
+		}
+		loadAttendance();
+	</script>
+  </body>
+</html>
