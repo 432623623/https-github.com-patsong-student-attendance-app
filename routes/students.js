@@ -1,86 +1,130 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../database');
+const pool = require('../db');
 
 // Create student
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { name, birthday, subject, grade } = req.body;
-  const sql = 'INSERT INTO students (name, birthday, subject, grade) VALUES (?, ?, ?, ?)';
-  db.run(sql, [name, birthday, subject, grade], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.status(201).json({ id: this.lastID, name, birthday, subject, grade });
-  });
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO students (name, birthday, subject, grade)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [name, birthday, subject, grade]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+	  if (err.code === '23505') {
+		return res.status(400).json({ error: 'Student already exists' });
+	  }
+	  res.status(500).json({ error: err.message });
+	}
 });
+
 
 // Read all students
-router.get('/', (req, res) => {
-  db.all('SELECT * FROM students', [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
-  });
+router.get('/', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM students');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
+
 
 // Read one student
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   const { id } = req.params;
-  db.get('SELECT * FROM students WHERE id = ?', [id], (err, row) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!row) return res.status(404).json({ error: 'Student not found' });
-    res.json(row);
-  });
+
+  try {
+    const result = await pool.query(
+      'SELECT * FROM students WHERE id = $1',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
+
 
 // Update student
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   const { id } = req.params;
   const { name, birthday, subject, grade } = req.body;
-  const sql = 'UPDATE students SET name = ?, birthday = ?, subject = ?, grade = ? WHERE id = ?';
-  db.run(sql, [name, birthday, subject, grade, id], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ updatedID: id, name, birthday, subject, grade });
-  });
+
+  try {
+    const result = await pool.query(
+      `UPDATE students
+       SET name = $1, birthday = $2, subject = $3, grade = $4
+       WHERE id = $5
+       RETURNING *`,
+      [name, birthday, subject, grade, id]
+    );
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
+
 
 // Delete student
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   const { id } = req.params;
-  db.run('DELETE FROM students WHERE id = ?', id, function (err) {
-    if (err) return res.status(500).json({ error: err.message });
+
+  try {
+    await pool.query('DELETE FROM students WHERE id = $1', [id]);
     res.json({ deletedID: id });
-  });
-});
-
-//GET attendance for last 7 days
-router.get('/attendance',(req,res)=>{
-	const query = `
-		SELECT s.id as student_id, s.name, a.date, a.status
-		FROM students s
-		LEFT JOIN attendance a 
-		ON s.id = a.student_id
-		ORDER BY s.id, a.date
-	`;
-	db.all(query,[],(err, rows)=>{
-		if (err) return res.status(500).json(err);
-		res.json(rows);
-	});
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 
-//UPDATE attendance
-router.post('/attendance',(req,res)=>{
-	const { student_id, date, status } = req.body;
-	
-	db.run(
-		`INSERT INTO attendance (student_id, date, status)
-		VALUES (?,?,?)
-		ON CONFLICT (student_id, date)
-		DO UPDATE SET status = excluded.status`,
-		[student_id, date, status],
-		function (err){
-			if (err) return res.status(500).json(err);
-			res.json({success: true});
-		}
-	);
+// GET attendance
+router.get('/attendance', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT s.id AS student_id, s.name, a.date, a.status
+      FROM students s
+      LEFT JOIN attendance a
+      ON s.id = a.student_id
+      ORDER BY s.id, a.date
+    `);
+
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json(err);
+  }
+});
+
+
+// UPDATE attendance (UPSERT)
+router.post('/attendance', async (req, res) => {
+  const { student_id, date, status } = req.body;
+
+  try {
+    await pool.query(
+      `INSERT INTO attendance (student_id, date, status)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (student_id, date)
+       DO UPDATE SET status = EXCLUDED.status`,
+      [student_id, date, status]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json(err);
+  }
 });
 
 module.exports = router;

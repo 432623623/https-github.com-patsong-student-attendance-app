@@ -43,21 +43,29 @@
 
 	<script>
 		const studentList = document.getElementById("student-list");
-
+		function getLocalDateString(date) {
+		  const year = date.getFullYear();
+		  const month = String(date.getMonth() + 1).padStart(2, '0');
+		  const day = String(date.getDate()).padStart(2, '0');
+		  return `${year}-${month}-${day}`;
+		}
 		function getLast7Days(){
-			const days= [];
-			for(let i=6; i>=0; i--){
-				const d = new Date();
-				d.setDate(d.getDate() - i);
-				days.push(d.toISOString().split("T")[0]);
-			}
-			return days;
+		  const days = [];
+
+		  for (let i = 6; i >= 0; i--) {
+			const d = new Date();
+			d.setDate(d.getDate() - i);
+			days.push(getLocalDateString(d));
+		  }
+
+		  return days;
 		}
 		async function loadAttendance(){
-			const res = await fetch("http://localhost:3000/api/attendance");
-			const data = await res.json();
-			console.log(data);
-			renderAttendance(data);
+		  const res = await fetch("/api/attendance");
+		  const data = await res.json();
+
+		  console.log(data);
+		  renderAttendance(data);
 		}
 		function renderAttendance(data){
 			studentList.innerHTML = '';
@@ -86,8 +94,8 @@
 			});
 			let index = 1;
 			
-			for (const studentId in grouped) {
-				const student = grouped[studentId];
+			for (const student_id in grouped) {
+				const student = grouped[student_id];
 				const row = document.createElement('tr');
 				let rowHTML = `<td>${index++}</td><td>${student.name}</td>`;
 				dates.forEach(date =>{
@@ -95,7 +103,7 @@
 					rowHTML +=`
 						<td>
 							<select class="status-select" 
-								onchange="updateAttendance(${studentId}, '${date}', this.value); setColor(this)">
+								onchange="updateAttendance(${student_id}, '${date}', this.value); setColor(this)">
 								<option value="">-</option>
 								<option value="Present" ${status === "Present" ? "selected" : ""}>Present</option>
 								<option value="Absent" ${status === "Absent" ? "selected" : ""}>Absent</option>
@@ -118,11 +126,14 @@
 			}
 		}
 		async function updateAttendance(student_id, date, status){
-			await fetch("http://localhost:3000/api/students/attendance", {
+			student_id = Number(student_id);
+			const res = await fetch("/api/attendance", {
 				method: "POST",
 				headers: {"Content-Type": "application/json"},
 				body: JSON.stringify({ student_id, date, status })
 			});
+			const data = await res.json();
+			console.log('saved:', data);
 		}
 		loadAttendance();
 	</script>

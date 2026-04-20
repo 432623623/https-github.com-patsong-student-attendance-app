@@ -1,23 +1,30 @@
-const sqlite3 = require('sqlite3').verbose();
-const db = new sqlite3.Database('./database.sqlite');
+const pool = require('./db');
 
-db.serialize(()=>{
-	db.run(`CREATE TABLE IF NOT EXISTS students(
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL,
-		birthday TEXT,
-		subject TEXT,
-		grade TEXT
-	)`);	
-	db.run(`CREATE TABLE IF NOT EXISTS attendance(
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		student_id INTEGER,
-		date TEXT,
-		status TEXT,
-		UNIQUE(student_id, date),
-		FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
-	)`);
-	db.run("PRAGMA foreign_keys = ON");
+async function createTables(){
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS students (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      birthday DATE,
+      subject TEXT,
+      grade TEXT
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS attendance (
+      id SERIAL PRIMARY KEY,
+      student_id INTEGER REFERENCES students(id) ON DELETE CASCADE,
+      date DATE NOT NULL,
+      status TEXT,
+      UNIQUE (student_id, date)
+    );	
+  `);
+
+  console.log('Tables ready');
+}
+
+createTables().catch(err => {
+  console.error('Table creation failed:', err.message);
 });
-
-module.exports = db;

@@ -39,7 +39,7 @@
     <h1>Manage Students</h1>
     <form id="student-form">
 		<input type="text" id="name-input" placeholder="student name" />
-		<input type="text" id="birthday-input" placeholder="birthday (YYYY/MM/DD)" />
+		<input type="date" id="birthday-input" placeholder="birthday (YYYY-MM-DD)" />
 		<input type="text" id="subject-input" placeholder="subject" />
 		<input type="text" id="grade-input" placeholder="grade" />
 
@@ -48,7 +48,7 @@
     <div id="student-list"></div>
 
     <script>
-      const API_URL = "http://localhost:3000/api/students";
+      const API_URL = "/api/students";
 
 		const studentForm = document.getElementById("student-form");
 		const nameInput = document.getElementById("name-input");
@@ -65,6 +65,16 @@
         const subject = subjectInput.value.trim();
         const grade = gradeInput.value.trim();
 
+
+		if (!isValidDate(birthday)) {
+		  alert("Invalid date format");
+		  return;
+		}
+				
+		if (!/^[a-zA-Z\s]+$/.test(name)) {
+			alert("invalid name format");
+		  return;
+		}
         if (name) {
           const student = { name, birthday, subject, grade };
           await createStudent(student);
@@ -77,6 +87,12 @@
         }
       });
 
+
+	function isValidDate(dateStr) {
+	  if (!dateStr) return true; // allow empty
+	  const d = new Date(dateStr);
+	  return !isNaN(d) && dateStr.match(/^\d{4}-\d{2}-\d{2}$/);
+	}
       async function loadStudents() {
         const students = await fetchStudents();
         renderStudents(students);
@@ -84,8 +100,9 @@
 
       async function fetchStudents() {
         const response = await fetch(API_URL);
-        const students = await response.json();
-        return students;
+        const data = await response.json();
+		console.log("API response:", data);
+        return data;
       }
 
       function renderStudents(students) {
@@ -98,28 +115,51 @@
 				<th>Birthday</th>
 				<th>Subject</th>
 				<th>Grade</th>
+				<th></th>
 			</tr>
 		`;
         students.forEach((student) => {
           const row = document.createElement("tr");
 			row.innerHTML = `
 				<td>${student.name}</td>
-				<td>${student.birthday}</td>
+				<td>${student.birthday.toString().split("T")[0]}</td>
                 <td>${student.subject}</td>
                 <td>${student.grade}</td>
+				<td>
+					<button data-id="${student.id}" class="delete-btn">delete</button>
+				</td>
 				`;
 			table.appendChild(row);
         });
 		studentList.appendChild(table);
+		
+		document.querySelectorAll(".delete-btn").forEach(btn =>{
+			btn.addEventListener("click", (e)=>{
+				const id = e.target.dataset.id;
+				
+				const confirmed = confirm("delete this student?");
+				if(!confirmed) return;
+				
+				deleteStudent(id);
+			});
+		});
       }
 
-      async function createStudent(student) {
-        await fetch(API_URL, {
-          method: "POST",
-          body: JSON.stringify(student),
-          headers: { "Content-Type": "application/json" },
-        });
-      }
+
+		async function createStudent(student) {
+		  const res = await fetch(API_URL, {
+			method: "POST",
+			body: JSON.stringify(student),
+			headers: { "Content-Type": "application/json" },
+		  });
+
+		  const data = await res.json();
+		  console.log('response:', data);
+
+		  if (!res.ok) {
+			alert(data.error || "Error creating student");
+		  }
+		}
 
       async function deleteStudent(id) {
         await fetch(`${API_URL}/${id}`, { method: "DELETE" });
@@ -138,6 +178,7 @@
           body: JSON.stringify(student),
           headers: { "Content-Type": "application/json" },
         });
+
       }
       loadStudents();
     </script>
