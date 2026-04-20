@@ -5,27 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Student Attendance App</title>
     <style>
-      body {
-        font-family: Arial, sans-serif;
-        max-width: 800px;
-        margin: auto;
-      }
-      #student-form {
-        display: flex;
-        justify-content: left;
-        margin-bottom: 30px;
-      }
-
+    body {
+		font-family: Arial, sans-serif;
+		max-width: 800px;
+		margin: auto;
+    }
+    #student-form {
+		display: flex;
+		justify-content: left;
+		margin-bottom: 30px;
+    }
 	table {
-	  font-family: Arial, Helvetica, sans-serif;
+		font-family: Arial, Helvetica, sans-serif;
 		border-collapse: collapse;
 	}
 	th {
-	  padding: 12px;
-	  text-align: left;
-	  background-color: grey;
-	  border: 1px solid #ddd;
-	  color: white;
+		padding: 12px;
+		text-align: left;
+		background-color: grey;
+		border: 1px solid #ddd;
+		color: white;
 	}
 	td {
 		padding: 12px;
@@ -42,71 +41,78 @@
 		<input type="date" id="birthday-input" placeholder="birthday (YYYY-MM-DD)" />
 		<input type="text" id="subject-input" placeholder="subject" />
 		<input type="text" id="grade-input" placeholder="grade" />
-
-      <button type="submit">Add</button>
+		<button type="submit">Add</button>
     </form>
     <div id="student-list"></div>
 
     <script>
-      const API_URL = "/api/students";
+	let editingStudentId = null;
+	
+    const API_URL = "/api/students";
 
-		const studentForm = document.getElementById("student-form");
-		const nameInput = document.getElementById("name-input");
-		const birthdayInput = document.getElementById("birthday-input");
-		const subjectInput = document.getElementById("subject-input");
-		const gradeInput = document.getElementById("grade-input");
-
-      const studentList = document.getElementById("student-list");
-
-		studentForm.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const name = nameInput.value.trim();
+	const studentForm = document.getElementById("student-form");
+	const nameInput = document.getElementById("name-input");
+	const birthdayInput = document.getElementById("birthday-input");
+	const subjectInput = document.getElementById("subject-input");
+	const gradeInput = document.getElementById("grade-input");
+    const studentList = document.getElementById("student-list");
+	const submitBtn = studentForm.querySelector("button");
+	
+	studentForm.addEventListener("submit", async (e) => {
+		e.preventDefault();
+		const name = nameInput.value.trim();
 		const birthday = birthdayInput.value.trim();
-        const subject = subjectInput.value.trim();
-        const grade = gradeInput.value.trim();
-
+		const subject = subjectInput.value.trim();
+		const grade = gradeInput.value.trim();
 
 		if (!isValidDate(birthday)) {
-		  alert("Invalid date format");
-		  return;
+			alert("Invalid date format");
+			return;
 		}
-				
+						
 		if (!/^[a-zA-Z\s]+$/.test(name)) {
 			alert("invalid name format");
-		  return;
+			return;
 		}
-        if (name) {
-          const student = { name, birthday, subject, grade };
-          await createStudent(student);
-          nameInput.value = "";
-          birthdayInput.value = "";
-          subjectInput.value = "";
-          gradeInput.value = "";
-			console.log('student:', student);
-          loadStudents();
-        }
-      });
+		
+		const student = { name, birthday, subject, grade };
+		
+		if(editingStudentId){
+			await updateStudent(editingStudentId, student);
+			editingStudentId = null;
+		} else {
+			await createStudent(student);
+		}
+		  
+		nameInput.value = "";
+		birthdayInput.value = "";
+		subjectInput.value = "";
+		gradeInput.value = "";
+
+		submitBtn.textContent = "Add";
+		loadStudents();        
+	});
 
 
 	function isValidDate(dateStr) {
-	  if (!dateStr) return true; // allow empty
-	  const d = new Date(dateStr);
-	  return !isNaN(d) && dateStr.match(/^\d{4}-\d{2}-\d{2}$/);
+		if (!dateStr) return true; // allow empty
+			const d = new Date(dateStr);
+			return !isNaN(d) && dateStr.match(/^\d{4}-\d{2}-\d{2}$/);
 	}
-      async function loadStudents() {
-        const students = await fetchStudents();
-        renderStudents(students);
-      }
+    async function loadStudents() {
+		const students = await fetchStudents();
+		renderStudents(students);
+    }
 
-      async function fetchStudents() {
-        const response = await fetch(API_URL);
-        const data = await response.json();
+    async function fetchStudents() {
+		const response = await fetch(API_URL);
+		const data = await response.json();
 		console.log("API response:", data);
-        return data;
-      }
+		return data;
+    }
 
-      function renderStudents(students) {
-        studentList.innerHTML = "";
+    function renderStudents(students) {
+		studentList.innerHTML = "";
 		const table = document.createElement('table');
 		table.border = '1';
 		table.innerHTML = `
@@ -115,7 +121,8 @@
 				<th>Birthday</th>
 				<th>Subject</th>
 				<th>Grade</th>
-				<th></th>
+				<th>Edit</th>
+				<th>Delete</th>
 			</tr>
 		`;
         students.forEach((student) => {
@@ -126,6 +133,9 @@
                 <td>${student.subject}</td>
                 <td>${student.grade}</td>
 				<td>
+					<button data-id="${student.id}" class="edit-btn">edit</button>
+				</td>
+				<td>
 					<button data-id="${student.id}" class="delete-btn">delete</button>
 				</td>
 				`;
@@ -135,52 +145,64 @@
 		
 		document.querySelectorAll(".delete-btn").forEach(btn =>{
 			btn.addEventListener("click", (e)=>{
-				const id = e.target.dataset.id;
-				
+				const id = e.target.dataset.id;				
 				const confirmed = confirm("delete this student?");
 				if(!confirmed) return;
 				
 				deleteStudent(id);
 			});
 		});
+		
+		document.querySelectorAll(".edit-btn").forEach(btn =>{
+			btn.addEventListener("click", async(e)=>{
+				const id = e.target.dataset.id;
+				const student = await getStudent(id);
+				
+				nameInput.value = student.name;
+				birthdayInput.value = student.birthday.split("T")[0];
+				subjectInput.value = student.subject;
+				gradeInput.value = student.grade;				
+				editingStudentId = id;
+				submitBtn.textContent = "Update";
+			});
+		});
       }
 
 
-		async function createStudent(student) {
-		  const res = await fetch(API_URL, {
+	async function createStudent(student) {
+		const res = await fetch(API_URL, {
 			method: "POST",
 			body: JSON.stringify(student),
 			headers: { "Content-Type": "application/json" },
-		  });
+		});
 
-		  const data = await res.json();
-		  console.log('response:', data);
+		const data = await res.json();
+		console.log('response:', data);
 
-		  if (!res.ok) {
+		if (!res.ok) {
 			alert(data.error || "Error creating student");
-		  }
 		}
+	}
 
-      async function deleteStudent(id) {
-        await fetch(`${API_URL}/${id}`, { method: "DELETE" });
-        loadStudents();
-      }
+    async function deleteStudent(id) {
+		await fetch(`${API_URL}/${id}`, { method: "DELETE" });
+		loadStudents();
+    }
 
-      async function getStudent(id) {
-        const response = await fetch(`${API_URL}/${id}`);
-        const student = await response.json();
-        return student;
-      }
+    async function getStudent(id) {
+		const response = await fetch(`${API_URL}/${id}`);
+		const student = await response.json();
+		return student;
+    }
 
-      async function updateStudent(student) {
-        await fetch(`${API_URL}/${todo.id}`, {
-          method: "PUT",
-          body: JSON.stringify(student),
-          headers: { "Content-Type": "application/json" },
-        });
-
-      }
-      loadStudents();
+    async function updateStudent(id, student) {
+		await fetch(`${API_URL}/${id}`, {
+			method: "PUT",
+			body: JSON.stringify(student),
+			headers: { "Content-Type": "application/json" },
+		});
+    }
+    loadStudents();
     </script>
   </body>
 </html>
